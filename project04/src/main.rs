@@ -48,18 +48,18 @@ fn main() -> Result<(), StegError> {
             let mut line = String::new();
 
             while reader.read_line(&mut line).unwrap() > 0 {
-            lines_read += 1;
+                lines_read += 1;
 
-            // clone the line to avoid changing ownership
-            // to the thread
-            let cloned_line = line.clone();
+                // clone the line to avoid changing ownership
+                // to the thread
+                let cloned_line = line.clone();
 
-            thread_pool.execute(move || {
-                process_line(lines_read, &cloned_line);
-            });
+                thread_pool.execute(move || {
+                    process_line(lines_read, &cloned_line);
+                });
 
-            line.clear();
-    }
+                line.clear();
+            }
         }
         3 => {
             
@@ -70,7 +70,7 @@ fn main() -> Result<(), StegError> {
             let path = Path::new(&path_string);// path from directory
 
             //vector for storing threads also mpsc channels
-            let mut handles = vec![];
+            //let mut handles = vec![];
             let (sender, receiver) = mpsc::channel();
 
             //list of files
@@ -87,61 +87,39 @@ fn main() -> Result<(), StegError> {
                 }
                 
             }
+            
+            let thread_pool = ThreadPool::new(thread_count);
+            
+            let f_list = file_list.clone();
+           
+            let mut index: usize = 0;
 
-            //for each thread
-            for i in 0..thread_count{
-
-                let tx = sender.clone();//clone the send channel
-                let mut job_list: Vec<String> = Vec::new();//initialize job list
-                let decimal_length: f64 = file_list.len() as f64;
-                let interval = (decimal_length/thread_count as f64).ceil();
-                let interval: usize = interval as usize; //determine interval size
-                let start =  interval*i; //determine start index for this threads jobs
-                let mut last_index = start+interval; //set last index as interval distance from start
-                if last_index>=file_list.len()-1 {last_index=file_list.len()-1;} // if last is greater than number of files, set to number of files -1
-                
-                let mut counter = start;//counter for which job to add
-
-                //until the job list is of properlength(), add jobs
-                while job_list.len()<interval{
-                    if counter >= last_index {break;}//if counter is greater than index, dont' add
-                    job_list.push(file_list[counter].clone().into_os_string().into_string().unwrap());//push the path to the job list
-                    counter+=1;//increment
-                }
-
-                //spawn a thread
-                let handle = thread::spawn(move||{
-
-                    //while jobs are remaining
-                    while job_list.len()!=0{
-
-                        //create ppm file from job
-                        let ppm = match libsteg::PPM::new(job_list[job_list.len()-1].clone()) {
+            for file in file_list{
+                let working_file = &f_list[index];
+                let tx = sender.clone();
+                let w = working_file.clone();
+                thread_pool.execute(move ||{
+                    let w = w.into_os_string().into_string().unwrap();
+                    let ppm = match libsteg::PPM::new(w.clone()) {
                             Ok(ppm) => ppm,
                             Err(err) => panic!("Error: {:?}", err),
-                         };
-                        let decoded:String = decode_message(&ppm.pixels).unwrap();//decode the string
-                        let payload = (job_list[job_list.len()-1].clone(),decoded);//create file and decoded message for payload
-                        tx.send(payload).unwrap();//send the payload
-                        job_list.pop();//take the job off the list
-                    }
+                    };
+                    let decoded:String = decode_message(&ppm.pixels).unwrap();
+
+                    tx.send((w.clone(),decoded)).unwrap();
                 });
-                handles.push(handle);//add the thread to the group of handles
+
+                index+=1;
             }
 
-
-            //vector of return values, for each file wait for decoded message and add to vector
             let mut returns = Vec::new();
             for _handle in 0..num_files-1 {
                 let value = receiver.recv().unwrap();
                 returns.push(value.clone());
-            }
-
-            //wait for each thread
-            for thread in handles{thread.join().unwrap();}
-
+             }
+             returns.sort();
+            
             let mut final_string: String = String::from("");//output string
-            returns.sort();//sort the returns by file name
             for r in returns{
                 final_string = format!("{}{}",final_string,r.1);//format to add each message to output string
             }
@@ -495,12 +473,12 @@ impl Drop for ThreadPool {
         // thread.join().unwrap();
 
         for worker in &mut self.workers {
-            eprintln!("Sending shutdown message to worker {}", worker.id);
+            //eprintln!("Sending shutdown message to worker {}", worker.id);
             self.sender.send(Message::Shutdown).unwrap();
         }
 
         for worker in &mut self.workers {
-            eprintln!("Shutting down worker {}", worker.id);
+            //eprintln!("Shutting down worker {}", worker.id);
             
 
             // worker.thread.join().unwrap();
@@ -595,12 +573,12 @@ impl Worker {
 
                 match message {
                     Message::NewJob(job) => {
-                        eprintln!("Worker {} got a job.", id);
+                        //eprintln!("Worker {} got a job.", id);
                         // we have to actually execute the job
                         job.call_box();
                     }
                     Message::Shutdown => {
-                        eprintln!("Worker {} shutting down", id);
+                        //eprintln!("Worker {} shutting down", id);
                         break;
                     }
                 };

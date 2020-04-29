@@ -1,2 +1,3 @@
 
-project04/target/
+project04/target/*
+project04/test-output/*
