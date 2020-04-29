@@ -94,7 +94,7 @@ fn main() -> Result<(), StegError> {
            
             let mut index: usize = 0;
 
-            for file in file_list{
+            for _file in file_list{
                 let working_file = &f_list[index];
                 let tx = sender.clone();
                 let w = working_file.clone();
@@ -234,8 +234,11 @@ fn main() -> Result<(), StegError> {
                     counter+=1;//increment
                 }
 
+                
                 //output file to write out to
                 let out = input_file.clone();
+                
+
 
                 //spawn a thread
                 let handle = thread::spawn(move || {
@@ -249,7 +252,20 @@ fn main() -> Result<(), StegError> {
 
                 
             }
-            for thread in handles{thread.join().unwrap();}//wait for each thread
+
+            let thread_pool = ThreadPool::new(thread_count);
+
+            while jobs.len() > 0{
+                let working_value = jobs.pop().unwrap();
+                let out = input_file.clone();
+                thread_pool.execute(move||{
+                    //println!("Working Value {:?}",working_value.1);
+                    let w = working_value.clone();
+                    writeout(w.clone().0,out.clone(),w.clone().1).expect("Could not write out");  
+
+                });
+            }
+            //for thread in handles{thread.join().unwrap();}//wait for each thread
         }
         _ => println!("You need to give 2 or 4 arguments!"),
     }
@@ -472,7 +488,7 @@ impl Drop for ThreadPool {
         // thread.join() blocks until the thread finishes running
         // thread.join().unwrap();
 
-        for worker in &mut self.workers {
+        for _worker in &mut self.workers {
             //eprintln!("Sending shutdown message to worker {}", worker.id);
             self.sender.send(Message::Shutdown).unwrap();
         }
@@ -561,7 +577,7 @@ impl ThreadPool {
 impl Worker {
 	fn new(id: usize, receiver: Arc<Mutex<mpsc::Receiver<Message>>>) -> Worker {
 		// still we don't know how to deal with this closure!
-
+        
 		let thread = thread::spawn(move || {
 			loop {
 				// use mutex to ensure that receiver is never being messed with
@@ -570,7 +586,6 @@ impl Worker {
 				// we need to pull one `Message` off of the queue (`receiver`)
                 let message = receiver.lock().unwrap().recv().unwrap();
 				// let job = receiver.lock().unwrap().recv().unwrap();
-
                 match message {
                     Message::NewJob(job) => {
                         //eprintln!("Worker {} got a job.", id);
