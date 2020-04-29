@@ -7,7 +7,7 @@ use std::sync::mpsc;
 use std::str;
 use std::fs::File;
 use std::io::prelude::*;
-use std::io;
+//use std::io;
 // use this if depending on local crate
 use libsteg;
 
@@ -28,39 +28,12 @@ fn main() -> Result<(), StegError> {
     let thread_count = &args[1];//establish thread count
 
     //check proper arguments length
-    // if args.len()!=3 {
-    //     eprintln!("You need to give 2 arguments");
-    //     return Ok(())
-    // }
+    if args.len()!=3 && args.len()!=5 {
+        eprintln!("You need to give 2 arguments");
+        return Ok(())
+    }
     
     match args.len() {
-        2 =>{
-            let thread_count = thread_count.parse::<usize>().unwrap();
-            let thread_pool = ThreadPool::new(thread_count);
-
-            // get stdin so we can read from it
-            let reader = io::stdin();
-
-            // let's keep track of the number of lines read
-            let mut lines_read = 0;
-
-            // we need a variable to store the line that is being read in
-            let mut line = String::new();
-
-            while reader.read_line(&mut line).unwrap() > 0 {
-                lines_read += 1;
-
-                // clone the line to avoid changing ownership
-                // to the thread
-                let cloned_line = line.clone();
-
-                thread_pool.execute(move || {
-                    process_line(lines_read, &cloned_line);
-                });
-
-                line.clear();
-            }
-        }
         3 => {
             
             let thread_count = thread_count.parse::<usize>().unwrap();//parse usize from thread count
@@ -123,13 +96,12 @@ fn main() -> Result<(), StegError> {
             for r in returns{
                 final_string = format!("{}{}",final_string,r.1);//format to add each message to output string
             }
+
             println!("{}\n",final_string);//print out output string
         }
         5 => {
             let thread_count = thread_count.parse::<usize>().unwrap();
             //cargo run <numThreads> <message file> <ppm directory> <output directory>
-
-            let mut handles = vec![];//vector for holding thread
 
             //let the message be the input from a file //ARGS 2
             let mut message = match fs::read_to_string(&args[2]) {
@@ -178,7 +150,6 @@ fn main() -> Result<(), StegError> {
 
             let input_file = file_list[0].clone();//set input file for ppm source
 
-            //eprintln!("Largest File {}",input_file.clone());
             let file_size = pixel_size(input_file.clone());//soze of the file
             let output_dir = String::from(&args[4]);//output directory
 
@@ -213,59 +184,17 @@ fn main() -> Result<(), StegError> {
                 start_slice=end_slice;
             }
 
-            //for each thread...
-            for i in 0..thread_count{
-                        
-                let mut job_list: Vec<(String,String)> = Vec::new();//initialize job list
-                let decimal_length: f64 = jobs.len() as f64;
-                let interval = (decimal_length/thread_count as f64).ceil();
-                let interval: usize = interval as usize; //determine interval size
-                let start =  interval*i; //determine start index for this threads jobs
-                let mut last_index = start+interval; //set last index as interval distance from start
-                if last_index>=jobs.len() {last_index=jobs.len();} // if last is greater than number of files, set to number of files -1
-
-                let mut counter = start;//counter for which job to add
-
-                //until the job list is of properlength(), add jobs
-                while job_list.len()<interval{
-                    if counter >= last_index {break;}//if counter is greater than index, dont' add
-                    //eprintln!("Thread: {} is getting {}, responsible for {}/{}",i,counter,start,last_index-1);
-                    job_list.push(jobs[counter].clone());//push the path to the job list
-                    counter+=1;//increment
-                }
-
-                
-                //output file to write out to
-                let out = input_file.clone();
-                
-
-
-                //spawn a thread
-                let handle = thread::spawn(move || {
-                    while job_list.len() !=0 {                        
-                        writeout(job_list[job_list.len()-1].0.clone(),out.clone(),job_list[job_list.len()-1].1.clone()).expect("Could not write out");    
-
-                        job_list.pop();//pop job off queue         
-                    }
-                });
-                handles.push(handle);//add thread to handle
-
-                
-            }
-
             let thread_pool = ThreadPool::new(thread_count);
 
             while jobs.len() > 0{
                 let working_value = jobs.pop().unwrap();
                 let out = input_file.clone();
                 thread_pool.execute(move||{
-                    //println!("Working Value {:?}",working_value.1);
                     let w = working_value.clone();
                     writeout(w.clone().0,out.clone(),w.clone().1).expect("Could not write out");  
 
                 });
             }
-            //for thread in handles{thread.join().unwrap();}//wait for each thread
         }
         _ => println!("You need to give 2 or 4 arguments!"),
     }
@@ -462,7 +391,7 @@ fn lsb(byte: u8) -> bool {
 
 
 
-//-------
+//----------- code from bing_threadpool----------------
 enum Message {
     NewJob(Job),
     Shutdown,
@@ -610,9 +539,4 @@ impl Worker {
 			thread,
 		}
 	}
-}
-
-// is the compiled code different if we line.trim() vs print!()
-fn process_line(line_number: u32, line: &str) {
-    print!("Line {}: {}", line_number, line);
 }
